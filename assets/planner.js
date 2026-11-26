@@ -7,10 +7,39 @@
   const heading = document.querySelector("#results-title");
   const empty = document.querySelector("#empty-state");
   const mapFallback = document.querySelector("#city-map-link");
+  const mapCategories = document.querySelector("#city-map-categories");
   const categoryButtons = [...document.querySelectorAll("[data-category]")];
   let category = new URLSearchParams(location.search).get("category") || "all";
+  const mapSearches = [
+    {key:"nature",icon:"🌿",title:"Nature & walks",query:"parks, lakes, gardens and walking trails"},
+    {key:"sports",icon:"⚽",title:"Sports & play",query:"sports grounds, sports arenas and turfs"},
+    {key:"cafe",icon:"☕",title:"Cafés & food",query:"cafes and coffee shops"},
+    {key:"sunset",icon:"🌇",title:"Sunset spots",query:"sunset viewpoints and lakeside spots"},
+    {key:"heritage",icon:"🏛️",title:"Heritage",query:"heritage sites, monuments and museums"},
+  ];
+  const cityList = [...new Set((window.INDIA_CITY_GROUPS || []).flatMap((group) => group.cities))];
+  const cityOptions = document.querySelector("#city-options");
+  cityList.forEach((city) => {
+    if (![...cityOptions.options].some((option) => option.value.toLowerCase() === city.toLowerCase())) {
+      cityOptions.append(new Option(city));
+    }
+  });
   const cap = (text) => text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
-  const mapsUrl = (place, city) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place ? `${place.name}, ${place.area}, Bhopal` : `places to visit in ${city}, India`)}`;
+  const mapsUrl = (place, city, preferences = {}) => {
+    if (place) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${place.name}, ${place.area}, Bhopal`)}`;
+    const terms = [preferences.categoryQuery ? `${preferences.categoryQuery} in ${city}, India` : `places to visit in ${city}, India`];
+    if (preferences.budget === "low") terms.push("budget friendly");
+    if (preferences.budget === "mid") terms.push("mid-range");
+    if (preferences.duration === "short") terms.push("short outing");
+    if (preferences.duration === "half") terms.push("half-day outing");
+    if (preferences.duration === "full") terms.push("day outing");
+    if (preferences.companion === "family") terms.push("family-friendly");
+    if (preferences.companion === "friends") terms.push("with friends");
+    if (preferences.companion === "partner") terms.push("couple-friendly");
+    if (preferences.vibe !== "all") terms.push(preferences.vibe);
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(terms.join(" "))}`;
+  };
+  const categoryMapsUrl = (item, city, preferences) => mapsUrl(null, city, {...preferences, vibe:preferences.vibe === "all" ? item.key : preferences.vibe, categoryQuery:item.query});
   const durationLabel = (minutes) => minutes < 90 ? "About 1 hour" : minutes < 180 ? "About 2–3 hours" : "Half-day idea";
   const priceLabel = (place) => {
     if (place.priceBand === "low") return "Indicative: budget-friendly · confirm current prices";
@@ -38,16 +67,22 @@
       if (vibe !== "all" && !place.tags.includes(vibe)) return false;
       return true;
     }) : [];
-    heading.textContent = isBhopal ? `Bhopal weekend ideas` : city ? `Weekend ideas for ${city}` : "Weekend ideas";
-    countNode.textContent = isBhopal ? `${places.length} sourced place${places.length === 1 ? "" : "s"}` : "No curated city list yet";
+    heading.textContent = isBhopal ? "Bhopal weekend ideas" : city ? `Discover places in ${city}` : "Weekend ideas";
+    countNode.textContent = isBhopal ? `${places.length} sourced place${places.length === 1 ? "" : "s"}` : city ? "Live Google Maps searches" : "Type any Indian city";
     cardsNode.innerHTML = places.map(card).join("");
     empty.hidden = places.length > 0;
-    mapFallback.href = mapsUrl(null, city || "Bhopal");
+    const mapPreferences = {budget,duration,companion,vibe};
+    mapFallback.href = mapsUrl(null, city || "Bhopal", mapPreferences);
     const isOtherCity = city.length > 0 && !isBhopal;
-    document.querySelector("#empty-title").textContent = isOtherCity ? `We’re still curating ${city}` : "No places match these filters";
-    document.querySelector("#empty-copy").textContent = isOtherCity ? `We don’t have a sourced activity list for ${city} yet. Search Google Maps for places there, or choose Bhopal to browse the current directory.` : "Try a different category or reset your filters to see all the Bhopal listings.";
+    const noCity = city.length === 0;
+    document.querySelector("#empty-title").textContent = isOtherCity ? `Explore ${city} by category` : noCity ? "Search any Indian city" : "No Bhopal places match these filters";
+    document.querySelector("#empty-copy").textContent = isOtherCity ? `Bhopal is the first Offscript-curated city. These Google Maps searches help you find current places in ${city}; their details are supplied by Maps, not verified by Offscript.` : noCity ? "Type a city name above, or choose one of the popular city buttons." : "Try another category or reset filters to browse the Bhopal directory.";
     mapFallback.hidden = !isOtherCity;
-    document.querySelector("#empty-reset").hidden = isOtherCity;
+    mapFallback.textContent = `Search all places in ${city} on Maps ↗`;
+    mapCategories.hidden = !isOtherCity;
+    const selectedMapSearches = category === "all" ? mapSearches : mapSearches.filter((item) => item.key === category);
+    mapCategories.innerHTML = selectedMapSearches.map((item) => `<a class="map-search-card" href="${categoryMapsUrl(item, city, mapPreferences)}" target="_blank" rel="noopener"><span>${item.icon}</span><b>${item.title}</b><small>Find current places on Google Maps ↗</small></a>`).join("");
+    document.querySelector("#empty-reset").hidden = isOtherCity || noCity;
   }
   form.addEventListener("input", render);
   form.addEventListener("change", render);
